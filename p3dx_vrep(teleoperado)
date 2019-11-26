@@ -1,0 +1,131 @@
+-- This is a very simple EXAMPLE navigation program, which avoids obstacles using the Braitenberg algorithm
+
+function cmd_vel__callback(msg_)
+    -- Apply the received image to the passive vision sensor that acts as an image container
+    msg = msg_
+    print(msg_)
+    
+    
+end
+ 
+if (sim_call_type==sim.syscb_init) then 
+    -- Iniciando a API de comunicacao com o MATLAB
+    simRemoteApi.start(19999)
+    -- chamando inicializacao
+    if (not pluginNotFound) then
+        local sysTime=sim.getSystemTimeInMs(-1)
+    -- we add a random component so that we can have several instances of this robot running 
+        local MotorSpeedTopicName='velMotores' 
+        handler_robo = sim.getObjectHandle('Pioneer_p3dx')
+        pubPosicao = simROS.advertise('/roboPosicao','geometry_msgs/Point')
+        pubMotor = simROS.advertise('/motores','geometry_msgs/Point')
+    end
+    
+    print("=== Inicializacao pronta. Iniciando atuacao ===")
+    
+    motorLeft=sim.getObjectHandle("Pioneer_p3dx_leftMotor")
+    motorRight=sim.getObjectHandle("Pioneer_p3dx_rightMotor")
+    
+    
+    sub=simROS.subscribe('/cmd_vel', 'geometry_msgs/Twist', 'cmd_vel__callback')
+    simROS.subscriberTreatUInt8ArrayAsString(sub) -- treat uint8 arrays as strings (much faster, tables/arrays are kind of slow in Lua)
+    msg = {}
+    M1 = 0
+    M2 = 100
+    M3 = 100
+    M4 = 100
+    Posicao = {}
+    tf_rosiInitialPose = getTransformStamped(robotHandle ,'static_InitialPose',-1,'world')
+    simROS.sendTransform(tf_rosiInitialPose)
+end
+
+if (sim_call_type==sim.syscb_cleanup) then 
+ 
+end 
+
+if (sim_call_type==sim.syscb_actuation) then 
+    if msg ~= nil then
+        local wheel_radius = 0.2
+        local wheel_separation = 0.5
+        -- Posicao do Robo
+
+        Posicao_g = {}
+        Posicao_g = sim.getObjectPosition(handler_robo, -1)
+        Posicao = {}
+        Posicao['x'] = Posicao_g[1]
+        Posicao['y'] = Posicao_g[2]
+        Posicao['z'] = Posicao_g[3]
+        simROS.publish(pubPosicao,Posicao)
+        --simROS.publish(pubPosicao,Posicao)
+        --print(Posicao) 
+        -- odometria de roda
+        previousJointPosition_L = {}
+        previousJointPosition_R = {}
+        totalJointPosition_L = {}
+        totalJointPosition_R = {}
+        previousJointPosition_L=sim.getJointPosition(motorLeft)
+        previousJointPosition_R=sim.getJointPosition(motorRight)
+        totalJointPosition_L=previousJointPosition_L
+        totalJointPosition_R=previousJointPosition_R
+        local dl=sim.getJointPosition(motorLeft)-previousJointPosition_L
+        local dr=sim.getJointPosition(motorRight)-previousJointPosition_R
+
+        if (dl>=0) then
+            dl=math.mod(dl+math.pi,2*math.pi)-math.pi
+        else
+            dl=math.mod(dl-math.pi,2*math.pi)+math.pi
+        end
+        if (dr>=0) then
+            dr=math.mod(dr+math.pi,2*math.pi)-math.pi
+        else
+            dr=math.mod(dr-math.pi,2*math.pi)+math.pi
+        end
+        
+        totalJointPosition_L=totalJointPosition_L+dl
+        previousJointPosition_L=sim.getJointPosition(motorLeft)
+        totalJointPosition_R=totalJointPosition_R+dr
+        previousJointPosition_R=sim.getJointPosition(motorRight)
+        --print(totalJointPosition)
+
+        -- Velocidade motores
+        Motor = {}
+
+        --local speed_left = (msg['linear']['x'] + msg['angular']['z'] * wheel_separation/2)/wheel_radius
+        --local speed_right = (msg['linear']['x'] - msg['angular']['z'] * wheel_separation/2)/wheel_radius
+        Motor['x'] = speed_left     -- Esquerdo
+        Motor['y'] = speed_right    -- Direito
+        Motor['z'] = 0
+        simROS.publish(pubMotor,Motor)
+        -- se nao for usar a teleoperacao comente as 2 linhas abaixo
+        --sim.setJointTargetVelocity(motorLeft, speed_right)
+        --sim.setJointTargetVelocity(motorRight, speed_left)
+if (M1 <= 60) then
+        sim.setJointTargetVelocity(motorLeft, 2.5)
+        sim.setJointTargetVelocity(motorRight, 2.5)
+        if (M1 == 50) then M2 = 1 end
+end
+if (M2 <= 60 ) then
+        sim.setJointTargetVelocity(motorLeft, 3.5)
+        sim.setJointTargetVelocity(motorRight, 1.5)
+        M2 = M2 + 1
+        if (M2 == 60) then M3 = 1 end
+end 
+if (M3 <= 90 ) then
+        sim.setJointTargetVelocity(motorLeft, 1.5)
+        sim.setJointTargetVelocity(motorRight, 3.5)
+        M3 = M3 + 1
+        if (M3 == 90) then M4 = 1 end
+end
+if (M4 <= 50 ) then
+        sim.setJointTargetVelocity(motorLeft, 2.5)
+        sim.setJointTargetVelocity(motorRight, 2.5)
+        M4 = M4 + 1
+        if (M4 == 50) then 
+        sim.setJointTargetVelocity(motorLeft, 0)
+        sim.setJointTargetVelocity(motorRight, 0)  
+end
+end        
+M1 = M1 + 1
+    end
+end 
+
